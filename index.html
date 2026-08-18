@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solar Production Estimator</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: linear-gradient(180deg, #FAF6EC 0%, #F2E9D8 55%, #EFE2C9 100%);
+    font-family: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+    color: #24303A;
+    padding: 28px 16px 60px;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  .eyebrow {
+    font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: #8A6A2B; font-family: system-ui, sans-serif; margin-bottom: 6px;
+  }
+  h1 { font-size: 30px; margin: 0; font-weight: 600; line-height: 1.15; }
+  .sub { font-family: system-ui, sans-serif; font-size: 14px; color: #5B6670; margin-top: 8px; max-width: 560px; }
+  .card {
+    background: rgba(255,255,255,0.72); border-radius: 14px; padding: 20px;
+    margin-bottom: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    font-family: system-ui, sans-serif;
+  }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  label { display: block; font-size: 12px; color: #5B6670; margin-bottom: 6px; }
+  input[type=number], select {
+    width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #D9CBA5;
+    background: #FFFDF8; font-size: 14px; font-family: system-ui, sans-serif;
+  }
+  input[type=range] { width: 100%; }
+  .full { grid-column: 1 / -1; }
+  .split-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+  .split-row select { flex: 1; }
+  .split-row input[type=number] { width: 90px; }
+  .pct-label { font-size: 13px; color: #5B6670; width: 14px; }
+  .remove-btn {
+    border: none; background: transparent; color: #B5502B; font-size: 18px;
+    cursor: pointer; padding: 0 6px;
+  }
+  .remove-btn:disabled { color: #C9BFA3; cursor: default; }
+  .add-btn {
+    margin-top: 4px; border: 1px solid #D9CBA5; background: #FFFDF8; border-radius: 8px;
+    padding: 6px 14px; font-size: 13px; color: #8A6A2B; cursor: pointer; font-family: system-ui, sans-serif;
+  }
+  .warn { margin-top: 10px; font-size: 12.5px; color: #B5502B; }
+  .split-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  .stat { background: rgba(255,255,255,0.72); border-radius: 12px; padding: 14px 16px; font-family: system-ui, sans-serif; }
+  .stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #8A6A2B; }
+  .stat-value { font-size: 20px; font-weight: 600; margin-top: 4px; font-family: 'Iowan Old Style', Georgia, serif; }
+  .chart-card { background: rgba(255,255,255,0.72); border-radius: 14px; padding: 16px 12px; margin-bottom: 20px; }
+  svg text { font-family: system-ui, sans-serif; fill: #5B6670; font-size: 11px; }
+  .bar { fill: #E8B25D; }
+  .bar.peak { fill: #D9862A; }
+  .bar:hover { opacity: 0.85; cursor: pointer; }
+  details { background: rgba(255,255,255,0.72); border-radius: 14px; padding: 16px 20px; font-family: system-ui, sans-serif; font-size: 13.5px; color: #3E4750; }
+  summary { cursor: pointer; font-weight: 600; color: #24303A; }
+  details p { margin: 0 0 8px; line-height: 1.6; }
+  #tooltip {
+    position: absolute; background: #24303A; color: #FAF6EC; font-family: system-ui, sans-serif;
+    font-size: 12px; padding: 4px 8px; border-radius: 6px; pointer-events: none; display: none;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">Theoretical monthly yield · educational estimate</div>
+  <h1>Solar Production Estimator</h1>
+  <p class="sub">Split your system across multiple roof orientations — e.g. 50% east, 50% west — and see the combined month-by-month generation curve.</p>
+
+  <div class="card">
+    <div class="grid2">
+      <div>
+        <label>System size (kWp)</label>
+        <input type="number" id="kw" min="0.5" step="0.5" value="6">
+      </div>
+      <div>
+        <label>Location</label>
+        <select id="location"></select>
+      </div>
+      <div>
+        <label id="latLabel">Latitude (°N): 45.4</label>
+        <input type="range" id="lat" min="30" max="62" step="0.1" value="45.4">
+      </div>
+      <div>
+        <label id="prLabel">Performance ratio: 80%</label>
+        <input type="range" id="pr" min="0.6" max="0.9" step="0.01" value="0.8">
+      </div>
+      <div class="full">
+        <label id="tiltLabel">Tilt (applies to all orientations): 30°</label>
+        <input type="range" id="tilt" min="0" max="60" step="1" value="30">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="split-header">
+      <label style="margin-bottom:0">Orientation split</label>
+      <span id="pctCheck" style="font-size:12px;"></span>
+    </div>
+    <div id="splitRows"></div>
+    <button class="add-btn" id="addSplit">+ Add orientation</button>
+    <div class="warn" id="pctWarning" style="display:none;">Splits should add up to 100% of your system size for an accurate total.</div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="stat-label">Annual total</div><div class="stat-value" id="statAnnual">–</div></div>
+    <div class="stat"><div class="stat-label">Specific yield</div><div class="stat-value" id="statYield">–</div></div>
+    <div class="stat"><div class="stat-label">Peak month</div><div class="stat-value" id="statPeak">–</div></div>
+  </div>
+
+  <div class="chart-card">
+    <svg id="chart" width="100%" height="260" viewBox="0 0 720 260"></svg>
+  </div>
+
+  <details>
+    <summary>How the estimate is calculated</summary>
+    <p><strong>For each orientation leg:</strong> kWh = (system kW × leg %) × peak sun hours/day × days in month × performance ratio × orientation factor. The month's total is the sum across all legs.</p>
+    <p><strong>Peak sun hours</strong> is a simplified stand-in for daily solar irradiance, interpolated from a small table of latitude bands rather than measured satellite data.</p>
+    <p><strong>Performance ratio</strong> bundles real-world losses — inverter efficiency, wiring, heat, soiling, shading — typically 75–85% for a well-designed system.</p>
+    <p><strong>Orientation factor</strong> penalises tilt away from the latitude's optimal angle, and azimuth away from true south (northern hemisphere) — so east/west legs come out lower than south-facing, even at the same tilt.</p>
+  </details>
+</div>
+<div id="tooltip"></div>
+
+<script>
+const PSH_TABLE = {
+  30: [2.7,3.5,4.6,5.7,6.5,7.1,7.3,6.6,5.4,3.9,2.8,2.3],
+  35: [2.4,3.2,4.3,5.4,6.2,6.8,7.0,6.3,5.1,3.6,2.5,2.0],
+  40: [2.0,2.8,3.9,5.0,5.9,6.4,6.6,5.9,4.6,3.1,2.1,1.7],
+  45: [1.5,2.3,3.4,4.4,5.3,5.8,6.0,5.3,4.0,2.6,1.6,1.2],
+  50: [0.9,1.6,2.7,3.9,4.8,5.1,5.0,4.3,3.1,1.8,1.0,0.7],
+  55: [0.5,1.1,2.2,3.5,4.5,4.8,4.6,3.8,2.6,1.3,0.6,0.3],
+  60: [0.2,0.7,1.8,3.2,4.3,4.6,4.4,3.4,2.1,0.9,0.3,0.1],
+};
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const DAYS_IN_MONTH = [31,28,31,30,31,30,31,31,30,31,30,31];
+const LOCATIONS = [
+  { name: "Custom", lat: null },
+  { name: "Palermo, IT", lat: 38.1 },
+  { name: "Rome, IT", lat: 41.9 },
+  { name: "Custoza / Verona, IT", lat: 45.4 },
+  { name: "Milan, IT", lat: 45.5 },
+  { name: "Munich, DE", lat: 48.1 },
+  { name: "London, UK", lat: 51.5 },
+  { name: "Oslo, NO", lat: 59.9 },
+];
+const DIRECTIONS = { South: 0, West: 90, North: 180, East: -90 };
+
+function interpolatePSH(lat) {
+  const bands = Object.keys(PSH_TABLE).map(Number).sort((a,b)=>a-b);
+  const clamped = Math.min(Math.max(lat, bands[0]), bands[bands.length-1]);
+  let lower = bands[0], upper = bands[bands.length-1];
+  for (let i=0;i<bands.length-1;i++){
+    if (clamped>=bands[i] && clamped<=bands[i+1]){ lower=bands[i]; upper=bands[i+1]; break; }
+  }
+  if (lower===upper) return PSH_TABLE[lower];
+  const t = (clamped-lower)/(upper-lower);
+  return PSH_TABLE[lower].map((v,i)=> v + t*(PSH_TABLE[upper][i]-v));
+}
+function orientationFactor(tilt, azimuthDeg, lat) {
+  const optimalTilt = Math.max(0, Math.min(60, lat*0.87));
+  const tiltPenalty = 0.00035 * Math.pow(tilt-optimalTilt, 2);
+  const tiltFactor = Math.max(0.55, 1 - tiltPenalty);
+  const azRad = (azimuthDeg*Math.PI)/180;
+  const azFactor = 0.85 + 0.15*Math.cos(azRad);
+  return Math.max(0.5, Math.min(1.05, tiltFactor*azFactor));
+}
+
+let splits = [ { id:1, direction:"East", pct:50 }, { id:2, direction:"West", pct:50 } ];
+let nextId = 3;
+let locationName = "Custoza / Verona, IT";
+
+const $ = id => document.getElementById(id);
+
+function populateLocations(){
+  const sel = $("location");
+  LOCATIONS.forEach(l=>{
+    const opt = document.createElement("option");
+    opt.value = l.name; opt.textContent = l.name;
+    if (l.name===locationName) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function renderSplits(){
+  const container = $("splitRows");
+  container.innerHTML = "";
+  splits.forEach(s=>{
+    const row = document.createElement("div");
+    row.className = "split-row";
+    const dirSel = document.createElement("select");
+    Object.keys(DIRECTIONS).forEach(d=>{
+      const o = document.createElement("option");
+      o.value = d; o.textContent = d;
+      if (d===s.direction) o.selected = true;
+      dirSel.appendChild(o);
+    });
+    dirSel.onchange = e => { s.direction = e.target.value; recalc(); };
+
+    const pctInput = document.createElement("input");
+    pctInput.type = "number"; pctInput.min = 0; pctInput.max = 100; pctInput.value = s.pct;
+    pctInput.oninput = e => { s.pct = Number(e.target.value); recalc(); };
+
+    const pctLabel = document.createElement("span");
+    pctLabel.className = "pct-label"; pctLabel.textContent = "%";
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "remove-btn"; removeBtn.textContent = "×";
+    removeBtn.disabled = splits.length <= 1;
+    removeBtn.onclick = () => {
+      if (splits.length > 1) { splits = splits.filter(r=>r.id!==s.id); renderSplits(); recalc(); }
+    };
+
+    row.appendChild(dirSel); row.appendChild(pctInput); row.appendChild(pctLabel); row.appendChild(removeBtn);
+    container.appendChild(row);
+  });
+}
+
+$("addSplit").onclick = () => {
+  splits.push({ id: nextId++, direction: "South", pct: 0 });
+  renderSplits(); recalc();
+};
+
+$("location").addEventListener("change", e=>{
+  locationName = e.target.value;
+  const loc = LOCATIONS.find(l=>l.name===locationName);
+  if (loc && loc.lat!==null){ $("lat").value = loc.lat; }
+  recalc();
+});
+["kw","lat","pr","tilt"].forEach(id=>{
+  $(id).addEventListener("input", ()=>{
+    if (id==="lat") locationName = "Custom";
+    recalc();
+  });
+});
+
+function drawChart(data, peakKwh){
+  const svg = $("chart");
+  svg.innerHTML = "";
+  const W = 720, H = 260, padL = 40, padB = 24, padT = 10, padR = 10;
+  const chartW = W - padL - padR, chartH = H - padT - padB;
+  const maxVal = Math.max(...data.map(d=>d.kwh), 1);
+  const barW = chartW / data.length * 0.6;
+  const gap = chartW / data.length;
+
+  // gridlines
+  for (let i=0;i<=4;i++){
+    const y = padT + chartH - (chartH*i/4);
+    const line = document.createElementNS("http://www.w3.org/2000/svg","line");
+    line.setAttribute("x1", padL); line.setAttribute("x2", W-padR);
+    line.setAttribute("y1", y); line.setAttribute("y2", y);
+    line.setAttribute("stroke", "#D9CBA5"); line.setAttribute("stroke-dasharray","2 4");
+    svg.appendChild(line);
+    const txt = document.createElementNS("http://www.w3.org/2000/svg","text");
+    txt.setAttribute("x", 4); txt.setAttribute("y", y+4);
+    txt.textContent = Math.round(maxVal*i/4);
+    svg.appendChild(txt);
+  }
+
+  data.forEach((d,i)=>{
+    const x = padL + gap*i + (gap-barW)/2;
+    const h = maxVal>0 ? (d.kwh/maxVal)*chartH : 0;
+    const y = padT + chartH - h;
+    const rect = document.createElementNS("http://www.w3.org/2000/svg","rect");
+    rect.setAttribute("x", x); rect.setAttribute("y", y);
+    rect.setAttribute("width", barW); rect.setAttribute("height", h);
+    rect.setAttribute("rx", 4);
+    rect.setAttribute("class", "bar" + (d.kwh===peakKwh ? " peak" : ""));
+    rect.addEventListener("mousemove", (e)=>{
+      const tip = $("tooltip");
+      tip.style.display = "block";
+      tip.style.left = (e.pageX+10)+"px";
+      tip.style.top = (e.pageY-28)+"px";
+      tip.textContent = d.month + ": " + d.kwh + " kWh";
+    });
+    rect.addEventListener("mouseleave", ()=>{ $("tooltip").style.display = "none"; });
+    svg.appendChild(rect);
+
+    const label = document.createElementNS("http://www.w3.org/2000/svg","text");
+    label.setAttribute("x", x + barW/2); label.setAttribute("y", H-6);
+    label.setAttribute("text-anchor","middle");
+    label.textContent = d.month;
+    svg.appendChild(label);
+  });
+}
+
+function recalc(){
+  const kw = Math.max(0.5, Number($("kw").value));
+  const lat = Number($("lat").value);
+  const tilt = Number($("tilt").value);
+  const pr = Number($("pr").value);
+
+  $("latLabel").textContent = "Latitude (°N): " + lat.toFixed(1);
+  $("prLabel").textContent = "Performance ratio: " + Math.round(pr*100) + "%";
+  $("tiltLabel").textContent = "Tilt (applies to all orientations): " + tilt + "°";
+
+  const totalPct = splits.reduce((s,r)=> s + Number(r.pct||0), 0);
+  const pctCheck = $("pctCheck");
+  pctCheck.textContent = totalPct + "% of " + kw + " kWp allocated";
+  pctCheck.style.color = totalPct===100 ? "#5B7A5B" : "#B5502B";
+  $("pctWarning").style.display = totalPct===100 ? "none" : "block";
+
+  const psh = interpolatePSH(lat);
+  const data = MONTHS.map((m,i)=>{
+    let kwh = 0;
+    splits.forEach(s=>{
+      const legKw = kw * (Number(s.pct||0)/100);
+      const factor = orientationFactor(tilt, DIRECTIONS[s.direction], lat);
+      kwh += legKw * psh[i] * DAYS_IN_MONTH[i] * pr * factor;
+    });
+    return { month: m, kwh: Math.round(kwh) };
+  });
+
+  const annual = data.reduce((s,d)=>s+d.kwh, 0);
+  const specificYield = Math.round(annual/kw);
+  const peak = data.reduce((a,b)=> b.kwh>a.kwh ? b : a, data[0]);
+
+  $("statAnnual").textContent = annual.toLocaleString() + " kWh";
+  $("statYield").textContent = specificYield + " kWh/kWp";
+  $("statPeak").textContent = peak.month + " · " + peak.kwh + " kWh";
+
+  drawChart(data, peak.kwh);
+}
+
+populateLocations();
+renderSplits();
+recalc();
+</script>
+</body>
+</html>
